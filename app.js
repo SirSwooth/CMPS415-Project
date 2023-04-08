@@ -153,3 +153,25 @@ app.post('/rest/ticket/', (req, res) => {
     }
 
 });
+
+// for testing purposes, resets ticketList json file
+app.get('/rest/list/reset', (req, res) => {
+
+    const ticketListJSON = {
+        ticketList : [
+
+        ]
+    }
+
+    fs.writeFile("ticketList.json", JSON.stringify(ticketListJSON, null, 2), "utf8", (err) => {
+
+        if (err) {
+            console.log(err);
+            res.send(`There was an error: "${err}"`);
+        }
+
+    });
+
+    res.send();
+
+});
