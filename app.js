@@ -42,7 +42,12 @@ app.get('/rest/list', (req, res) => {
                 }
 
                 console.log(ticketArr);
-                res.send(ticketArr);
+
+                if(ticketArr.length == 0){
+                    res.send("No tickets available.");
+                } else {
+                    res.send(ticketArr);
+                }
 
             } catch (err) {
                 console.log(err);
