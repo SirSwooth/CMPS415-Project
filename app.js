@@ -2,6 +2,8 @@
 const express = require('express');
 const fs = require('fs');
 const readline = require ('readline');
+const { MongoClient } = require("mongodb");
+const uri = "mongodb+srv://bradylandry:3xpLpsmn1iHMfAPf@cluster0.7otayma.mongodb.net/?retryWrites=true&w=majority"
 
 
 const app = express();
@@ -24,88 +26,116 @@ app.get('/', (req, res) => {
 // Route to get all tickets:
 app.get('/rest/list', (req, res) => {
 
-    fs.readFile("ticketList.json", "utf8", (err, data) => {
-        
-        if (err) {
-            console.log(err);
-            res.send(`There was an error: "${err}"`);
-        } else {
+    const client = new MongoClient(uri);
 
-            try {
+    var alltickets = [];
 
-                data = JSON.parse(data);
-                ticketList = data.ticketList;
-                const ticketArr = [];
+    async function run() {
 
-                for(i = 0; i < ticketList.length; i++) {
-                    ticketArr.push(ticketList[i]);
-                }
+        try {
 
-                console.log(ticketArr);
+            const db = client.db('Tickets');
+            const collection = db.collection('TicketList');
 
-                if(ticketArr.length == 0){
-                    res.send("No tickets available.");
+            alltickets = await collection.find({}).toArray(function (err, data) {
+                if(err) {
+                    console.log(err);
+                    throw err;
                 } else {
-                    res.send(ticketArr);
+                    console.log(data);
+                    res.send(data);
                 }
+            });
 
-            } catch (err) {
-                console.log(err);
-                res.send(`There was an error: "${err}"`);
-            }
-
+        } catch (e) {
+            console.log(e);
+        } finally {
+            await client.close();
         }
-    
-    });
+
+        res.send(alltickets);
+
+    }
+
+    run().catch(console.dir);
 
 });
 
 // Route to get a ticket by ID:
 app.get('/rest/ticket/:id', function(req, res) {
 
-    const ticketID = req.params.id;
+    // ticket info
+    var ticketID = Number(req.params.id);
+    var ticket;
+
+    // mongo
+    const client = new MongoClient(uri);
     
-    fs.readFile("ticketList.json", "utf8", (err, data) => {
+    async function run() {
+
+        try {
+
+            const db = client.db('Tickets');
+            const collection = db.collection('TicketList');
+
+            ticket = await collection.findOne( { id: ticketID }, function (err, data) {
+                if(err) {
+                    console.log(err);
+                    throw err;
+                } else {
+                    console.log(data);
+                    db.close();
+                }
+            });
+
+            console.log(ticket);
+
+        } catch (e) {
+            console.log(e);
+        } finally {
+            await client.close();
+        }
+
+        if (ticket == null) {
+            res.send(`Ticket with id ${ticketID} not found`);
+            console.log(`Ticket with id ${ticketID} not found`);
+        } else {
+            res.send(ticket);
+        }
+
+    }
+
+    run().catch(console.dir);
+
+});
+
+// form route
+app.get('/rest/ticket', (req, res) => {
+
+    fs.readFile('./postform.html', 'utf-8', (err, data) => {
 
         if (err) {
             console.log(err);
-            res.send(`There was an error: "${err}"`);
         } else {
-
-            try {
-
-                data = JSON.parse(data);
-                ticketList = data.ticketList;
-
-                qTicket = ticketList.find(x => x.id == ticketID);
-
-                if(qTicket) {
-                    qTicket = JSON.stringify(qTicket);
-                    res.send("Found this ticket: " + qTicket);
-                } else {
-                    console.log(`Could not find ticket with id ${ticketID}`);
-                    res.send(`Could not find ticket with id ${ticketID}`);
-                }
-                
-
-            } catch (err) {
-                console.log(err);
-                res.send(`There was an error: "${err}"`);
-            }
-
+            res.write(data);
         }
+
+        res.send();
 
     });
 
 });
 
 // Route to create a ticket:
-app.post('/rest/ticket/', (req, res) => {
+app.post('/createticketbyform/', (req, res) => {
 
+    // ticket info
     const ticket = req.body;
     console.log(ticket);
 
-    incompleteForm = false;
+    // mongo
+    const client = new MongoClient(uri);
+
 
     if( ticket.id &&
         ticket.created_at &&
@@ -121,36 +151,41 @@ app.post('/rest/ticket/', (req, res) => {
         ticket.tags)
     {
 
-        fs.readFile("ticketList.json", "utf8", (err, data) => {
+        async function run() {
 
-            if (err) {
-                console.log(err);
-                res.send(`There was an error: "${err}"`);
-            } else {
+            try {
     
-                try {
+                const db = client.db('Tickets');
+                const collection = db.collection('TicketList');
+
+                // cast certain properties of ticket to number instead of string
+                ticket.id = Number(ticket.id);
+                ticket.assignee_id = Number(ticket.assignee_id);
+                ticket.follower_ids = Number(ticket.follower_ids);
+
+                collection.insertOne(ticket, function (err, data) {
+
+                    if (err) {
+                        console.log(err);
+                        throw err;
+                    } else {
+                        console.log(data);
+                        db.close();
+                    }
+
+                });
     
-                    data = JSON.parse(data);
-                    data.ticketList.push(ticket);
-    
-                    data = JSON.stringify(data, null, 2);
-    
-                    fs.writeFile("ticketList.json", data, "utf8", (err) => {
-                        if (err) {
-                            console.log(err);
-                        } else {
-                            res.send("ticket created successfully");
-                        }
-                    });
-    
-                } catch (err) {
-                    console.log(err);
-                    res.send(`There was an error: "${err}"`);
-                }
-    
+            } catch (e) {
+                console.log(e);
+                res.send(e);
+            } finally {
+                await client.close();
             }
     
-        });
+        }
+
+        run().catch(console.dir);
+        res.send("Ticket succesfully created");
 
     } else {
         console.log("Ticket creation failed: empty fields.")
@@ -159,24 +194,155 @@ app.post('/rest/ticket/', (req, res) => {
 
 });
 
-// for testing purposes, resets ticketList json file
-app.get('/rest/list/reset', (req, res) => {
+/*
+// edit form route
+app.get('rest/ticket/edit/:id', (req, res) => {
 
-    const ticketListJSON = {
-        ticketList : [
+    // ticket info
+    var ticketID = Number(req.params.id);
+    var ticket;
 
-        ]
+    // mongo
+    const client = new MongoClient(uri);
+
+    async function run() {
+
+        const db = client.db('Tickets');
+        const collection = db.collection('TicketList');
+
+        try {
+
+            ticket = await collection.findOne( { id: ticketID }, function (err, data) {
+
+                if(err) {
+                    console.log(err);
+                    throw err;
+                } else {
+                    console.log(data);
+                }
+        
+            });
+
+        } catch (e) {
+            console.log(e);
+            res.send("Error getting ticket");
+        }
+
     }
 
-    fs.writeFile("ticketList.json", JSON.stringify(ticketListJSON, null, 2), "utf8", (err) => {
+    run().catch(console.dir);
+
+    fs.readFile('./postform.html', 'utf-8', (err, data) => {
 
         if (err) {
             console.log(err);
-            res.send(`There was an error: "${err}"`);
+        } else {
+            res.write(data);
         }
+
+        res.send();
 
     });
 
-    res.send();
+});
+*/
+
+// Route to edit a ticket with specified ID:
+app.put('/rest/ticket/:id', (req, res) => {
+
+    // ticket info
+    var ticketID = Number(req.params.id);
+    var ticket = req.body;
+
+    // mongo
+    const client = new MongoClient(uri);
+
+    async function run() {
+
+        try {
+
+            const db = client.db('Tickets');
+            const collection = db.collection('TicketList');
+
+            await collection.updateOne( { id: ticketID }, {
+
+                // everything except 'id', 'submitter', and 'created_at' can be changed
+                $set:
+                {
+                    "updated_at": ticket.update_at,
+                    "type": ticket.type,
+                    "subject": ticket.subject,
+                    "description": ticket.description,
+                    "priority": ticket.priority,
+                    "status": ticket.status,
+                    "recipient": ticket.recipient,
+                    "assignee_id": ticket.assignee_id,
+                    "follower_ids": ticket.follower_ids,
+                    "tags": ticket.tags
+                }
+
+                }, function (err, data) {
+
+                if(err) {
+                    res.send(err);
+                    console.log(err);
+                } else {
+                    console.log(data);
+                    db.close();
+                }
+
+            });
+
+        } catch(e) {
+            console.log(e);
+        } finally {
+            res.send();
+        }
+
+    }
+
+    run().catch(console.dir);
+
+});
+
+// Route to delete a ticket with specified ID:
+app.delete('/rest/ticket/:id', (req, res) => {
+
+    // ticket info
+    const ticketID = Number(req.params.id);
+
+    // mongo
+    const client = new MongoClient(uri);
+
+    async function run() {
+
+        try {
+
+            const db = client.db('Tickets');
+            const collection = db.collection('TicketList');
+
+            collection.deleteOne({ id: ticketID }, function (err, data) {
+
+                if (err) {
+                    console.log(err);
+                    throw err;
+                } else {
+                    console.log(err);
+                    db.close();
+                }
+
+            });
+
+        } catch (e) {
+            console.log(e);
+        } finally {
+            console.log("delete");
+            res.send("delete");
+            await client.close();
+        }
+
+    }
+
+    run().catch(console.dir);
 
 });
